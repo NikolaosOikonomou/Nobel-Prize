@@ -1,0 +1,223 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <link href="Content/bootstrap.css" rel="stylesheet" />
+    <style>
+        #myApp {
+            display: none
+        }
+     th{
+         color:white;
+     }
+    </style>
+</head>
+<body>
+    <!-- With Ajax method, drawing the data in Json file.The "response" has an array named prizes.
+        In every array position there is an object with 3 prperties=>Categories(string), year(string)
+        laurates(array of object) or overallMotivation.From the objects in laurate's array drawing the
+        firstname,surname properties.-->
+
+    <div id="myApp">
+        <div class="container mb-3 mt-3">
+            <div class="row">
+                <div class="col">
+                    <div class="">
+                        <label for="category">Search Category :</label>
+                        <select id="category" class="form-control">
+                            <option value="">All</option>
+
+                        </select>
+                    </div>
+                </div>
+
+                <divc class=" col">
+                    <label for="year">Search Year</label>
+                    <input id="year" class="form-control" type="range" name="name" value="" />
+                    <strong id="rangeMonitor"></strong>
+                </divc>
+
+                <div class="col">
+                    <label for="sortOptions">Sort Options</label>
+                    <select id="sortOptions" class="form-control">
+                        <option value="yearAsc">Sort by year Asc</option>
+                        <option value="yearDesc"> Sort by year Desc</option>
+                        <option value="categoryAsc">Sort by Category Asc</option>
+                        <option value="categoryDesc">Sort by Category Desc</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="container m-con">
+            <div class="col-12 ">
+                <table class="table table-striped table-bordered">
+                    <thead class="bg-dark">
+                        <tr>
+                            <th>year</th>
+                            <th>category</th>
+                            <th>laureates</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+
+                </table>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="Scripts/jquery-3.6.0.js"></script>
+    <script>
+
+        //----------------Getting the date
+        var settings = {
+            "url": "https://api.nobelprize.org/v1/prize.json?",
+            "method": "GET",
+            "timeout": 0,
+        };
+
+        $.ajax(settings).done(function (response) {
+            console.log(response);
+            $("#myApp").show(); // Pairing this with a css rule so the jumping effect when the page loads is not visible
+            let prizes = response.prizes; //From the response Object, taking the property prizes wich is an array of Objects
+            prizes.reverse();
+            InitFiltering(prizes);  //Contains 2 function.One generates values for the select option(id=category)
+            //and the other for the range input(id=year)
+
+            let filteredprizes = prizes;
+
+            //Adding event listeners to implement filters
+            $("#category").on("change", Filtering);
+            $("#year").on("input", Filtering);
+            $("#sortOptions").on("change", Filtering);
+
+            //-----------------   Filtering   ------------------
+            function Filtering() {
+                filteredprizes = prizes;
+
+                if ($("#category").val()) {
+                    filteredprizes = filteredprizes.filter(x => x.category.includes($("#category").val())); //based on category
+                }
+                if ($("#year").val()) {
+                    filteredprizes = filteredprizes.filter(x => x.year >= $("#year").val()); //based on year
+                }
+
+                //-------------- Sorting ---------------
+                let sortedOption = $("#sortOptions").val();
+                switch (sortedOption) {
+
+
+                    case "yearAsc": filteredprizes = filteredprizes.sort((a, b) => a.year - b.year); break;
+                    case "yearDesc": filteredprizes = filteredprizes.sort((a, b) => b.year - a.year); break;
+                    case "categoryAsc": filteredprizes = filteredprizes.sort((a, b) => a.category < b.category ? -1 : 1); break;
+                    case "categoryDesc": filteredprizes = filteredprizes.sort((a, b) => b.category < a.category ? -1 : 1); break;
+                    default: filteredprizes = filteredprizes.sort((a, b) => a.year - b.year); break;
+                }
+
+                //Droping and create tbody's display
+                RebuildTBody();
+            }
+
+
+            //Creating,adding table's body and Filling the table with data
+            filteredprizes.forEach(AppendPrizeDetails);
+            function AppendPrizeDetails(prize) {
+                let template =
+                               `
+                                 <tr>
+                                    <td>${prize.year}</td>
+                                    <td>${prize.category}</td>
+                                    <td>
+                                          <ul>
+                                                ${DisplayData(prize)}
+                                          </ul>
+                                    </td>
+                                 </tr>
+                               `
+
+                let ele = $(template);
+                $("table > tbody").append(ele);
+            }
+
+            //Some Prizes has overallMotivation instead of laureates as property
+            //With this function we are cathing this issue
+            function DisplayData(prize) {
+                if (prize.laureates) {                   //Adding eventiListener which calls a function to display laureate's country on mouse over
+                    return prize.laureates.map(x => `<li onmouseover="GetCountry(${x.id})" id=${x.id}>${x.firstname} ${x.surname ? x.surname : ""}</li>`).join("")
+                }                                                                          //Creating attribute to save laureate's id
+                else {
+                    return `<li>${prize.overallMotivation}</li>`
+                }
+
+            }
+
+
+
+            function InitFiltering(prizes) {
+                CreatingSelectOptionForCategories();//Creating Select options for Categories
+                CreateRangeSlider();//Generating the values for the slide bar.Also Giving default values.
+
+                function CreatingSelectOptionForCategories() {
+                    let categories = prizes.map(x => x.category); //drawing the categories title
+                    let distinctCategories = [...new Set(categories)]; // createing a new array with unique titles values
+
+                    $("#category").append(distinctCategories.map(x => `<option>${x}</option>`))
+                }
+
+
+                function CreateRangeSlider() {
+                    let years = prizes.map(x => x.year);  //Getting all the Dates
+                    let minDate = Math.min(...years);     //Finding the lowest Date
+                    let maxDate = Math.max(...years);     //Finding the highest Date
+
+                    //Creating new attribute for the range input(min and max Values)
+                    $("#year").attr("min", minDate);
+                    $("#year").attr("max", maxDate);
+                    //Initialize default values
+                    $("#year").val(minDate);
+                    $("#rangeMonitor").text(minDate);
+
+                    //Adding an eventListener when moving the range input
+                    $("#year").on("input", function () {
+                        $("#rangeMonitor").text($(this).val());
+
+                    })
+                }
+            }
+
+            //Droping and create tbody's display(using this in Filtering function)
+            function RebuildTBody() {
+                $("table > tbody").html(""); //Clearing data in tbody before,
+                filteredprizes.forEach(AppendPrizeDetails);  //adding data
+            }
+
+        });
+
+
+
+        function GetCountry(id) {
+            var settings = {
+                "url": "https://api.nobelprize.org/v1/laureate.json?id=" + id, //Drawing laureate's data
+                "method": "GET",
+                "timeout": 0,
+            };
+
+            $.ajax(settings).done(function (response) {
+
+                let tempId = "#" + id;
+                let country = response.laureates[0].bornCountry; //Drawing laureate's country
+                $(tempId).attr("title", country);
+            });
+        }
+
+    </script>
+
+
+
+
+
+</body>
+</html>
